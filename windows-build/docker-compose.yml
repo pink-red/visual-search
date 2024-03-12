@@ -1,0 +1,13 @@
+version: "3.9"
+services:
+  builder:
+    build: .
+    volumes:
+      - ./pip-cache:/opt/wineprefix/drive_c/users/root/AppData/Local/pip/cache/
+      - ../src:/workdir/src
+      - ./out:/workdir/out
+
+networks:
+  default:
+    driver_opts:
+      com.docker.network.driver.mtu: 1420

@@ -31,21 +31,6 @@ def map_optional(f, x):
         return f(x)
 
 
-def approximate_video_bit_rate(ffprobe_info) -> int:
-    video = next(
-        x for x in ffprobe_info["streams"] if x["codec_type"] == "video"
-    )
-
-    total_bit_rate = int(ffprobe_info["format"]["bit_rate"])
-    other_streams_bit_rate = 0
-    for stream in ffprobe_info["streams"]:
-        if stream["index"] == video["index"]:
-            continue
-        other_streams_bit_rate += int(stream["bit_rate"])
-
-    return total_bit_rate - other_streams_bit_rate
-
-
 def extract_media_metadata(path: Path):
     res = subprocess.run(
         [
@@ -77,11 +62,7 @@ def extract_media_metadata(path: Path):
                     if video["avg_frame_rate"] != "0/0"
                     else None
                 ),
-                "bit_rate": (
-                    int(video["bit_rate"])
-                    if "bit_rate" in video
-                    else approximate_video_bit_rate(res)
-                ),
+                "bit_rate": map_optional(int, video.get("bit_rate")),
                 "codec": video["codec_name"],
             },
             "audio": {

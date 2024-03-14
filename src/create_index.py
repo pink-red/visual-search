@@ -1,6 +1,7 @@
 import argparse
 from datetime import datetime, timezone
 import json
+import os
 from tempfile import TemporaryDirectory
 import torch
 from tqdm import tqdm
@@ -238,13 +239,17 @@ def make_app(
         analytics_enabled=False,
         css="""
             #form-wrapper {
-                width: 500px;
+                width: 600px;
                 margin: auto;
             }
 
             /* Скрываем дефолтный прогресс Gradio */
             #progress-el .progress-text {
                 display: none;
+            }
+
+            input[data-testid="number-input"] {
+                width: 70px;
             }
         """,
     ) as app:
@@ -259,7 +264,8 @@ def make_app(
                 interval_seconds = gr.Slider(
                     label="Интервал, сек.",
                     info=(
-                        'Для "обычных" видео, оставьте значение по умолчанию.'
+                        'Насколько часто извлекать кадры из видео. Для'
+                        + ' "обычных" видео, оставьте значение по умолчанию.'
                         + ' Для более динамичных, уменьшите интервал.'
                     ),
                     minimum=1,
@@ -286,7 +292,7 @@ def make_app(
                     + " Если на SSD, ставьте равным количеству ядер."
                 ),
                 minimum=1,
-                maximum=16,
+                maximum=os.cpu_count(),
                 value=1,
                 step=1,
             )
@@ -298,7 +304,7 @@ def make_app(
                     + " ядер, поскольку один обработчик загружает 3-4 ядра."
                 ),
                 minimum=1,
-                maximum=8,
+                maximum=os.cpu_count(),
                 value=1,
                 step=1,
             )
@@ -306,6 +312,9 @@ def make_app(
             progress_el = gr.HTML(elem_id="progress-el")
 
         process.click(
+            lambda: "",
+            outputs=progress_el,
+        ).then(
             do_create_index,
             inputs=[
                 input_dir,

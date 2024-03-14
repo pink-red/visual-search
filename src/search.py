@@ -30,7 +30,6 @@ def is_webp(file_path):
 
 
 def cosine_similarity(a, b):
-#    return np.dot(query, items.T) / (np.linalg.norm(query) * np.linalg.norm(items, axis=1))
     return np.dot(a, b) / (np.linalg.norm(a, axis=1) * np.linalg.norm(b))
 
 
@@ -330,8 +329,19 @@ class Search:
             matches=matches, group_by_video=group_by_video
         )
 
-    @staticmethod
-    def _top_results(matches, group_by_video: bool):
+    def get_all_frames_for_video(self, phash: str):
+        frames = self.df[self.df.source_phash == phash]
+
+        images = self._read_images(frames)
+
+        captions = []
+        for _, x in frames.iterrows():
+            captions.append(utils.format_timestamp(x.source_time))
+
+        return list(zip(images, captions))
+
+    @classmethod
+    def _top_results(cls, matches, group_by_video: bool):
         if group_by_video:
             matches = matches.loc[
                 # FIXME: убедиться, что df отсортирован заранее
@@ -342,21 +352,34 @@ class Search:
 
         matches = matches.nlargest(200, "score", keep="all")[:200]
 
-        archives_by_path = {}
-        for x in set(matches.index_path):
-            archives_by_path[x] = ZipFile(x)
-        results = []
+        images = cls._read_images(matches)
+
+        captions = []
         for _, m in matches.iterrows():
-            archive = archives_by_path[m.index_path]
-            with archive.open("thumbnails/" + m.path) as f:
-                img = Image.open(f)
-                img.load()
-            caption = (
+            captions.append(
                 f"{m.score * 100:.1f}% {m.source_path}"
                 + f" {utils.format_timestamp(m.source_time)}"
                 + f" ({m.index_name})"
             )
-            results.append((img, caption))
+
+        results = list(zip(images, captions))
+        return matches, results
+
+    @staticmethod
+    def _read_images(items) -> list[Image.Image]:
+        archives_by_path = {}
+        for x in set(items.index_path):
+            archives_by_path[x] = ZipFile(x)
+
+        images = []
+        for _, m in items.iterrows():
+            archive = archives_by_path[m.index_path]
+            with archive.open("thumbnails/" + m.path) as f:
+                img = Image.open(f)
+                img.load()
+            images.append(img)
+
         for x in archives_by_path.values():
             x.close()
-        return matches, results
+
+        return images

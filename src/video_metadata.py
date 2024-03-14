@@ -96,10 +96,15 @@ def extract_media_metadata(path: Path):
 
 
 def extract_file_metadata(path: Path):
+    try:
+        oshash = make_oshash(path)
+    except ValueError:
+        oshash = None
+
     metadata = {
         "file_size": path.stat().st_size,
         "hashes": {
-            "oshash": make_oshash(path),
+            "oshash": oshash,
             "md5": make_md5(path),
             "phash": video_phash(path),
         },

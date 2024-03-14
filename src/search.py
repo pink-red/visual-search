@@ -1,3 +1,4 @@
+import dataclasses
 from dataclasses import dataclass
 from datetime import timedelta
 import json
@@ -125,7 +126,7 @@ def load_index(index_path: str | Path):
     return df, embeddings, metadata
 
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class QueryTag:
     name: str
     is_positive: bool
@@ -285,6 +286,8 @@ class Search:
         matches = self.df.copy(deep=False)
 
         query = parse_query(query)
+        query.tags = self._apply_aliases(query.tags)
+        query.tags = set(query.tags)
 
         unknown_tags = (
             set(t.name for t in query.tags) - set(self.model.tags["name"])
@@ -328,6 +331,16 @@ class Search:
         return self._top_results(
             matches=matches, group_by_video=group_by_video
         )
+
+    def _apply_aliases(self, tags: list[QueryTag]) -> list[QueryTag]:
+        results = []
+        for t in tags:
+            results.append(
+                dataclasses.replace(
+                    t, name=self.model.aliases.get(t.name, t.name)
+                )
+            )
+        return results
 
     def get_all_frames_for_video(self, phash: str):
         frames = self.df[self.df.source_phash == phash]

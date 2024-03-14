@@ -89,6 +89,8 @@ class ModelV3:
         self.model.eval()
 
         self.tags = pd.read_csv(path / "selected_tags.csv")
+        with open(path / "aliases.json") as f:
+            self.aliases = json.load(f)
 
         self.embs_dim = self.model.num_features
         self.model_height = self.model.pretrained_cfg["input_size"][-1]

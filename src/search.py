@@ -352,8 +352,9 @@ class Search:
                 img = Image.open(f)
                 img.load()
             caption = (
-                f"{m.source_path} {utils.format_timestamp(m.source_time)}"
-                f" ({m.index_name})"
+                f"{m.score * 100:.1f}% {m.source_path}"
+                + f" {utils.format_timestamp(m.source_time)}"
+                + f" ({m.index_name})"
             )
             results.append((img, caption))
         for x in archives_by_path.values():

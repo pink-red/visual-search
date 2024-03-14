@@ -61,30 +61,36 @@ def video_phash(video_path: str | Path) -> str:
 
 
 def generate_sprite_screenshot(video_path: Path, t: float) -> Image.Image:
-    command = [
-        utils.get_ffmpeg_command("ffmpeg"),
+    def do_generate(fast_seek: bool):
+        command = [
+            utils.get_ffmpeg_command("ffmpeg"),
 
-        "-hide_banner",
-#        "-loglevel", "error",
+            *(
+                ["-ss", str(t), "-i", str(video_path)]
+                if fast_seek
+                else ["-i", str(video_path), "-ss", str(t)]
+            ),
 
-        "-ss", str(t),
-        "-i", str(video_path),
+            "-frames:v", "1",
+            "-vf", f"scale={SCREENSHOT_SIZE}:{-2}",
 
-        "-frames:v", "1",
-        "-vf", f"scale={SCREENSHOT_SIZE}:{-2}",
+            "-c:v", "bmp",
+            "-f", "image2",
+            "-",
+        ]
+        res = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            creationflags=utils.no_window_flag(),
+        )
+        bio = BytesIO(res.stdout)
+        return Image.open(bio)
 
-        "-c:v", "bmp",
-        "-f", "image2",
-        "-",
-    ]
-    res = subprocess.run(
-        command,
-        check=True,
-        capture_output=True,
-        creationflags=utils.no_window_flag(),
-    )
-    bio = BytesIO(res.stdout)
-    return Image.open(bio)
+    try:
+        return do_generate(fast_seek=True)
+    except subprocess.CalledProcessError:
+        return do_generate(fast_seek=False)
 
 
 def combine_images(images: list[Image.Image]) -> Image.Image:

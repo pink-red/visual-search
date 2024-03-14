@@ -15,6 +15,7 @@ class SearchFrontend:
     def __init__(self, search: Search):
         self.search = search
         self.current_matches = None
+        self.match_idx = None
 
     def search_by_tags(self, *args, **kwargs):
         self.current_matches, results = self.search.search_by_tags(*args, **kwargs)
@@ -24,8 +25,11 @@ class SearchFrontend:
         self.current_matches, results = self.search.search_by_image(*args, **kwargs)
         return results
 
-    def get_metadata(self, evt: gr.SelectData):
-        match = self.current_matches.iloc[evt.index]
+    def set_match_idx(self, evt: gr.SelectData):
+        self.match_idx = evt.index
+
+    def get_current_match_metadata(self):
+        match = self.current_matches.iloc[self.match_idx]
 
         def h(x):
             return html.escape(str(x))
@@ -39,6 +43,11 @@ class SearchFrontend:
                 if not pd.isnull(match.url)  # pandas category
                 else ""
             )
+        )
+
+    def get_current_match_all_frames(self):
+        return self.search.get_all_frames_for_video(
+            phash=self.current_matches.iloc[self.match_idx].source_phash
         )
 
 
@@ -133,7 +142,7 @@ def make_app(
                 value=True,
                 scale=15,
             )
-        found_images = gr.Gallery(
+        found_images_gallery = gr.Gallery(
             # по умолчанию, отображаем кадры, в которых есть люди
             value=search_frontend.search_by_tags(
                 query="-no_humans", group_by_video=True
@@ -144,21 +153,33 @@ def make_app(
             object_fit="contain",
         )
         metadata_el = gr.HTML()
+        all_frames_gallery = gr.Gallery(
+            show_label=False,
+            columns=5,
+            height=650,
+            object_fit="contain",
+        )
 
         upload_image.upload(
             search_frontend.search_by_image,
             inputs=[upload_image, group_by_video_checkbox],
-            outputs=found_images,
+            outputs=found_images_gallery,
         )
         for on_event in [query_textbox.submit, search_btn.click]:
             on_event(
                 search_frontend.search_by_tags,
                 inputs=[query_textbox, group_by_video_checkbox],
-                outputs=found_images,
+                outputs=found_images_gallery,
             )
-        found_images.select(
-            search_frontend.get_metadata,
+        found_images_gallery.select(
+            search_frontend.set_match_idx,
+        ).then(
+            search_frontend.get_current_match_metadata,
             outputs=metadata_el,
+            show_progress="hidden",
+        ).then(
+            search_frontend.get_current_match_all_frames,
+            outputs=all_frames_gallery,
             show_progress="hidden",
         )
     return app

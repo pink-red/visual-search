@@ -242,6 +242,7 @@ class Search:
 
         self.df = pd.concat(dataframes, axis=0, ignore_index=True, copy=False)
         self.embeddings = np.concatenate(embedding_matrices, axis=0)
+        print(f"Загружено роликов: {len(self.df.source_phash.unique())}")
 
     def search_by_image(self, image_path: str, group_by_video: bool):
         image_path = Path(image_path)

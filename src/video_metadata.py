@@ -48,9 +48,21 @@ def extract_media_metadata(path: Path):
     )
     res = json.loads(res.stdout)
     video = next(x for x in res["streams"] if x["codec_type"] == "video")
-    audio = next(x for x in res["streams"] if x["codec_type"] == "audio")
+    audio = next(
+        (x for x in res["streams"] if x["codec_type"] == "audio"), None
+    )
 
     try:
+        if audio is not None:
+            audio_md = {
+                "codec": audio["codec_name"],
+                "channels": audio["channels"],
+                "sample_rate": int(audio["sample_rate"]),
+                "bit_rate": map_optional(int, audio.get("bit_rate")),
+            }
+        else:
+            audio_md = None
+
         return {
             "duration": get_video_duration(path),
             "video": {
@@ -65,12 +77,7 @@ def extract_media_metadata(path: Path):
                 "bit_rate": map_optional(int, video.get("bit_rate")),
                 "codec": video["codec_name"],
             },
-            "audio": {
-                "codec": audio["codec_name"],
-                "channels": audio["channels"],
-                "sample_rate": int(audio["sample_rate"]),
-                "bit_rate": int(audio["bit_rate"]),
-            },
+            "audio": audio_md,
         }
     except KeyError:
         raise ValueError(path)

@@ -1,4 +1,5 @@
 from io import BytesIO
+import json
 import math
 from pathlib import Path
 import subprocess
@@ -15,36 +16,43 @@ ROWS = 5
 
 
 def get_video_duration(video_path: Path) -> float:
-    command = [
-        utils.get_ffmpeg_command("ffprobe"),
+    def do_get_duration(seek_to_end: bool):
+        command = [
+            utils.get_ffmpeg_command("ffprobe"),
 
-        "-hide_banner",
-        "-loglevel", "error",
+            "-hide_banner",
+            "-loglevel", "error",
 
-        "-of", "compact=p=0:nk=1",
-        "-show_entries", "packet=pts_time",
-    ]
-    seek_to_end_args = ["-read_intervals", "9999999%+#1000"]
+            "-output_format", "json",
+            "-show_entries", "packet=pts_time",
 
-    res = subprocess.run(
-        [*command, *seek_to_end_args, str(video_path)],
-        check=True,
-        capture_output=True,
-        text=True,
-        creationflags=utils.no_window_flag(),
-    )
-    try:
-        return float(res.stdout.strip().split("\n")[-1])
-    except ValueError:
-        # перемотка до конца вызвала ошибку, пробуем по-другому
+            *(["-read_intervals", "9999999%+#1000"] if seek_to_end else []),
+
+            str(video_path),
+        ]
         res = subprocess.run(
-            [*command, str(video_path)],
+            command,
             check=True,
             capture_output=True,
             text=True,
             creationflags=utils.no_window_flag(),
         )
-        return float(res.stdout.strip().split("\n")[-1])
+        packet_infos = json.loads(res.stdout)["packets"]
+        packet_infos.reverse()
+        last_pts_time = next(
+            x["pts_time"]
+            for x in packet_infos
+            if "pts_time" in x
+        )
+        return float(last_pts_time)
+
+    try:
+        try:
+            return do_get_duration(seek_to_end=True)
+        except (ValueError, StopIteration):
+            return do_get_duration(seek_to_end=False)
+    except Exception:
+        raise ValueError(video_path)
 
 
 def video_phash(video_path: str | Path) -> str:

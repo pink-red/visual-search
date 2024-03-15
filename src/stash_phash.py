@@ -24,7 +24,7 @@ def get_video_duration(video_path: Path) -> float:
             "-loglevel", "error",
 
             "-output_format", "json",
-            "-show_entries", "packet=pts_time",
+            "-show_packets",
 
             *(["-read_intervals", "9999999%+#1000"] if seek_to_end else []),
 
@@ -39,12 +39,24 @@ def get_video_duration(video_path: Path) -> float:
         )
         packet_infos = json.loads(res.stdout)["packets"]
         packet_infos.reverse()
+
         last_pts_time = next(
-            x["pts_time"]
-            for x in packet_infos
-            if "pts_time" in x
+            (
+                x["pts_time"]
+                for x in packet_infos
+                if "pts_time" in x
+            ),
+            None
         )
-        return float(last_pts_time)
+        if last_pts_time is not None:
+            return float(last_pts_time)
+        else:
+            last_dts_time = next(
+                x["dts_time"]
+                for x in packet_infos
+                if "dts_time" in x
+            )
+            return float(last_dts_time)
 
     try:
         try:

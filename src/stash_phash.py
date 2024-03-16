@@ -8,6 +8,7 @@ import imagehash
 from PIL import Image
 
 import utils
+from utils import log
 
 
 SCREENSHOT_SIZE = 160
@@ -96,13 +97,19 @@ def generate_sprite_screenshot(video_path: Path, t: float) -> Image.Image:
             capture_output=True,
             creationflags=utils.no_window_flag(),
         )
+        if len(res.stdout) == 0:
+            log(f"WARNING: Не удалось извлечь кадр из {video_path} t={t}")
+            return None
         bio = BytesIO(res.stdout)
         return Image.open(bio)
 
     try:
-        return do_generate(fast_seek=True)
-    except subprocess.CalledProcessError:
-        return do_generate(fast_seek=False)
+        try:
+            return do_generate(fast_seek=True)
+        except subprocess.CalledProcessError:
+            return do_generate(fast_seek=False)
+    except Exception:
+        raise ValueError(video_path)
 
 
 def combine_images(images: list[Image.Image]) -> Image.Image:
@@ -113,7 +120,8 @@ def combine_images(images: list[Image.Image]) -> Image.Image:
     for i, img in enumerate(images):
         x = width * (i % COLUMNS)
         y = height * math.floor(i / ROWS)
-        montage.paste(img, (x, y))
+        if img is not None:
+            montage.paste(img, (x, y))
     return montage
 
 
@@ -129,7 +137,7 @@ def generate_sprite(video_path: Path) -> Image.Image:
         img = generate_sprite_screenshot(video_path, time)
         images.append(img)
     # Combine all of the thumbnails into a sprite image
-    if len(images) == 0:
+    if len([x for x in images if x is not None]) == 0:
         raise ValueError(f"images list is empty, failed to generate phash sprite for {video_path}")
     return combine_images(images)
 

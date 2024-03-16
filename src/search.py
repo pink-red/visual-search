@@ -12,6 +12,7 @@ import pandas as pd
 from pandas.api.types import union_categoricals
 from PIL import Image
 import safetensors.numpy
+from spellchecker import SpellChecker
 from tqdm import tqdm
 
 from model_v3 import ModelV3
@@ -216,6 +217,13 @@ def parse_query(query: str) -> Query:
 class Search:
     def __init__(self, model: ModelV3, indices_dir: Path):
         self.model = model
+
+        self.spellchecker = SpellChecker(language=None)
+        self.spellchecker.word_frequency.load_words(
+            model.tags["name"].to_list()
+        )
+        self.spellchecker.word_frequency.load_words(model.aliases.keys())
+
         self.tag_probs_cache = LRU(20)  # FIXME: захардкожено
 
         dataframes = []
@@ -294,8 +302,16 @@ class Search:
             set(t.name for t in query.tags) - set(self.model.tags["name"])
         )
         if unknown_tags:
+            unknown_tags = sorted(unknown_tags)
+            corrections = []
+            for t in unknown_tags:
+                cor = self.spellchecker.correction(t)
+                if cor is not None:
+                    corrections.append(f"{t} (похожий тег: {cor})")
+                else:
+                    corrections.append(t)
             raise ValueError(
-                "Неизвестные теги: " + ", ".join(sorted(unknown_tags))
+                "Неизвестные теги: " + ", ".join(corrections)
             )
 
         for flt in query.filters:

@@ -15,7 +15,6 @@ class SearchFrontend:
     def __init__(self, search: Search):
         self.search = search
         self.current_matches = None
-        self.match_idx = None
 
     def search_by_tags(self, *args, **kwargs):
         self.current_matches, results = self.search.search_by_tags(*args, **kwargs)
@@ -25,11 +24,8 @@ class SearchFrontend:
         self.current_matches, results = self.search.search_by_image(*args, **kwargs)
         return results
 
-    def set_match_idx(self, evt: gr.SelectData):
-        self.match_idx = evt.index
-
-    def get_current_match_metadata(self):
-        match = self.current_matches.iloc[self.match_idx]
+    def get_current_match_metadata(self, evt: gr.SelectData):
+        match = self.current_matches.iloc[evt.index]
 
         def h(x):
             return html.escape(str(x))
@@ -45,10 +41,9 @@ class SearchFrontend:
             )
         )
 
-    def get_current_match_all_frames(self):
-        return self.search.get_all_frames_for_video(
-            phash=self.current_matches.iloc[self.match_idx].source_phash
-        )
+    def get_current_match_all_frames(self, evt: gr.SelectData):
+        match = self.current_matches.iloc[evt.index]
+        return self.search.get_all_frames_for_video(phash=match.source_phash)
 
 
 def make_app(
@@ -172,12 +167,11 @@ def make_app(
                 outputs=found_images_gallery,
             )
         found_images_gallery.select(
-            search_frontend.set_match_idx,
-        ).then(
             search_frontend.get_current_match_metadata,
             outputs=metadata_el,
             show_progress="hidden",
-        ).then(
+        )
+        found_images_gallery.select(
             search_frontend.get_current_match_all_frames,
             outputs=all_frames_gallery,
             show_progress="hidden",

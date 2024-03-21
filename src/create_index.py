@@ -5,7 +5,6 @@ import os
 from tempfile import TemporaryDirectory
 import torch
 from tqdm import tqdm
-import shutil
 from pathlib import Path
 import sys
 from zipfile import ZipFile, ZIP_STORED
@@ -22,9 +21,13 @@ import utils
 
 
 def save_index(
-    path: Path, embeddings, input_images: list[InputImage], metadata
+    unpacked_index_dir: Path,
+    embeddings,
+    input_images: list[InputImage],
+    metadata,
+    output_index_dir: Path,
 ):
-    with open(path / "thumbnail_paths.json", "w") as f:
+    with open(unpacked_index_dir / "thumbnail_paths.json", "w") as f:
         json.dump(
             [
                 str(x.relative_path.with_suffix("").as_posix())
@@ -34,13 +37,13 @@ def save_index(
         )
     safetensors.numpy.save_file(
         {"embeddings": embeddings},
-        path / "embeddings.safetensors",
+        unpacked_index_dir / "embeddings.safetensors",
     )
 
-    with open(path / "metadata.json", "w") as f:
+    with open(unpacked_index_dir / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=4, ensure_ascii=False)
 
-    index_file_path = path / (metadata["name"] + ".vindex")
+    index_file_path = output_index_dir / (metadata["name"] + ".vindex")
     with ZipFile(
         index_file_path,
         "x",
@@ -48,16 +51,20 @@ def save_index(
         # сжатие замедляет извлечение, поэтому не используем его.
         compression=ZIP_STORED,
     ) as archive:
-        archive.write(path / "metadata.json", arcname="metadata.json")
         archive.write(
-            path / "embeddings.safetensors", arcname="embeddings.safetensors"
+            unpacked_index_dir / "metadata.json", arcname="metadata.json"
         )
         archive.write(
-            path / "thumbnail_paths.json", arcname="thumbnail_paths.json"
+            unpacked_index_dir / "embeddings.safetensors",
+            arcname="embeddings.safetensors",
         )
-        thumbnails_dir = path / "thumbnails"
+        archive.write(
+            unpacked_index_dir / "thumbnail_paths.json",
+            arcname="thumbnail_paths.json",
+        )
+        thumbnails_dir = unpacked_index_dir / "thumbnails"
         for x in thumbnails_dir.glob("**/*"):
-            archive.write(x, arcname=str(x.relative_to(path)))
+            archive.write(x, arcname=str(x.relative_to(unpacked_index_dir)))
 
     lossless_thumnails_zip_path = index_file_path.with_name(
         index_file_path.stem + "-lossless-thumbnails.zip"
@@ -65,7 +72,7 @@ def save_index(
     with ZipFile(
         lossless_thumnails_zip_path, "x", compression=ZIP_STORED
     ) as archive:
-        lossless_thumbnails_dir = path / "thumbnails-lossless"
+        lossless_thumbnails_dir = unpacked_index_dir / "thumbnails-lossless"
         for x in lossless_thumbnails_dir.glob("**/*"):
             archive.write(
                 x, arcname=str(x.relative_to(lossless_thumbnails_dir))
@@ -157,14 +164,12 @@ def create_index(
         }
 
         index_file_path, lossless_thumnails_zip_path = save_index(
-            path=tmp_dir,
+            unpacked_index_dir=tmp_dir,
             embeddings=embeddings,
             input_images=input_images,
             metadata=metadata,
+            output_index_dir=output_index_dir,
         )
-
-        shutil.copy(index_file_path, output_index_dir)
-        shutil.copy(lossless_thumnails_zip_path, output_index_dir)
 
 
 def cli():

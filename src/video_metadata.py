@@ -46,11 +46,10 @@ def extract_media_metadata(path: Path):
             ],
             check=True,
             capture_output=True,
-            text=True,
             creationflags=utils.no_window_flag(),
         )
     except subprocess.CalledProcessError as e:
-        print(e.stderr)
+        print(e.stderr.decode(errors="replace"))
         raise MetadataExtractionError(path)
     res = json.loads(res.stdout)
     video = next(x for x in res["streams"] if x["codec_type"] == "video")

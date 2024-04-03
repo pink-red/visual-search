@@ -53,7 +53,6 @@ def extract_video_frames_single(
             ],
             check=True,
             capture_output=True,
-            text=True,
             creationflags=utils.no_window_flag(),
         )
         return True, path, png_path, index_dir / "thumbnails-lossless"
@@ -63,7 +62,7 @@ def extract_video_frames_single(
             # завершаемся.
             raise ValueError
         else:
-            print(e.stderr)
+            print(e.stderr.decode(errors="replace"))
             return False, path, png_path, index_dir / "thumbnails-lossless"
 
 

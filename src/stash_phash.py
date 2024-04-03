@@ -39,11 +39,10 @@ def get_video_duration(video_path: Path) -> float:
                 command,
                 check=True,
                 capture_output=True,
-                text=True,
                 creationflags=utils.no_window_flag(),
             )
         except subprocess.CalledProcessError as e:
-            print(e.stderr)
+            print(e.stderr.decode(errors="replace"))
             raise
         packet_infos = json.loads(res.stdout)["packets"]
         packet_infos.reverse()

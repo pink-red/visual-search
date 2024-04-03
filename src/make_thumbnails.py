@@ -38,9 +38,7 @@ def extract_video_frames_single(
         subprocess.run(
             [
                 utils.get_ffmpeg_command("ffmpeg"),
-
                 "-hide_banner",
-                "-loglevel", "error",
 
                 "-i", str(path),
 
@@ -54,6 +52,8 @@ def extract_video_frames_single(
                 str(png_path / "%d.png"),
             ],
             check=True,
+            capture_output=True,
+            text=True,
             creationflags=utils.no_window_flag(),
         )
         return True, path, png_path, index_dir / "thumbnails-lossless"
@@ -63,26 +63,26 @@ def extract_video_frames_single(
             # завершаемся.
             raise ValueError
         else:
+            print(e.stderr)
             return False, path, png_path, index_dir / "thumbnails-lossless"
 
 
 def extract_video_frames(
     videos_dir: Path,
-    include_gifs: bool,
+    video_paths: list[Path],
     index_dir: Path,
     interval_seconds: int,
     side_size: int,
     num_workers: int,
     progress = None,
 ):
-    paths = utils.find_animated(videos_dir, include_gifs=include_gifs)
-
-    random.shuffle(paths)
+    video_paths = video_paths.copy()
+    random.shuffle(video_paths)
 
     input_images = []
     with (
         ThreadPoolExecutor(max_workers=num_workers) as executor,
-        tqdm(desc="Извлечение кадров", total=len(paths), smoothing=0) as tq,
+        tqdm(desc="Извлечение кадров", total=len(video_paths), smoothing=0) as tq,
     ):
         if progress is not None:
             progress(
@@ -101,7 +101,7 @@ def extract_video_frames(
                 interval_seconds=interval_seconds,
                 side_size=side_size,
             ),
-            paths,
+            video_paths,
             buffersize=num_workers,
         ):
             if not success:

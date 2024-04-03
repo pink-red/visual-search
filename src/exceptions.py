@@ -1,0 +1,2 @@
+class MetadataExtractionError(Exception):
+    pass

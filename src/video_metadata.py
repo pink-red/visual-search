@@ -1,5 +1,6 @@
 import argparse
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
 from fractions import Fraction
 import hashlib
 import json
@@ -13,6 +14,7 @@ from future_map import future_map
 from natsort import natsorted
 from oshash import oshash as make_oshash
 
+from exceptions import MetadataExtractionError
 from stash_phash import video_phash, get_video_duration
 from tqdm import tqdm
 import utils
@@ -32,20 +34,24 @@ def map_optional(f, x):
 
 
 def extract_media_metadata(path: Path):
-    res = subprocess.run(
-        [
-            utils.get_ffmpeg_command("ffprobe"),
-            "-loglevel", "error",
-            "-output_format", "json",
-            "-show_streams",
-            "-show_format",
-            str(path),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        creationflags=utils.no_window_flag(),
-    )
+    try:
+        res = subprocess.run(
+            [
+                utils.get_ffmpeg_command("ffprobe"),
+                "-hide_banner",
+                "-output_format", "json",
+                "-show_streams",
+                "-show_format",
+                str(path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            creationflags=utils.no_window_flag(),
+        )
+    except subprocess.CalledProcessError as e:
+        print(e.stderr)
+        raise MetadataExtractionError(path)
     res = json.loads(res.stdout)
     video = next(x for x in res["streams"] if x["codec_type"] == "video")
     audio = next(
@@ -83,22 +89,49 @@ def extract_media_metadata(path: Path):
         raise ValueError(path)
 
 
+@dataclass
+class FileMetadata:
+    metadata: dict
+
+
+@dataclass
+class SkippedFileMetadata:
+    metadata: dict
+
+
 def extract_file_metadata(path: Path):
     try:
         oshash = make_oshash(path)
     except ValueError:
         oshash = None
 
+    try:
+        phash = video_phash(path)
+    except MetadataExtractionError:
+        phash = None
+
+    try:
+        media_metadata = extract_media_metadata(path)
+    except MetadataExtractionError:
+        media_metadata = None
+
     metadata = {
         "file_size": path.stat().st_size,
         "hashes": {
             "oshash": oshash,
             "md5": make_md5(path),
-            "phash": video_phash(path),
+            "phash": phash,
         },
-        "media": extract_media_metadata(path),
+        "media": media_metadata,
     }
-    return path, metadata
+    if phash is None:
+        metadata["reason"] = "PhashError"
+        return path, SkippedFileMetadata(metadata)
+    elif media_metadata is None:
+        metadata["reason"] = "MediaMetadataError"
+        return path, SkippedFileMetadata(metadata)
+    else:
+        return path, FileMetadata(metadata)
 
 
 def extract_metadata(
@@ -116,6 +149,8 @@ def extract_metadata(
     random.shuffle(video_paths)
 
     metadata_by_file = {}
+    skipped_files = {}
+    ok_paths = []
     with (
         ProcessPoolExecutor(max_workers=num_workers) as executor,
         tqdm(
@@ -135,11 +170,18 @@ def extract_metadata(
             video_paths,
             buffersize=num_workers,
         ):
-            rel_path = path.relative_to(videos_dir)
-            metadata_by_file[str(rel_path.as_posix())] = {
-                **file_metadata,
-                "url": url,
-            }
+            rel_path = str(path.relative_to(videos_dir).as_posix())
+            if isinstance(file_metadata, FileMetadata):
+                metadata_by_file[rel_path] = {
+                    **file_metadata.metadata,
+                    "url": url,
+                }
+                ok_paths.append(path)
+            else:
+                skipped_files[rel_path] = {
+                    **file_metadata.metadata,
+                    "url": url,
+                }
             tq.update(1)
             if progress is not None:
                 progress(
@@ -152,28 +194,4 @@ def extract_metadata(
     metadata_by_file = dict(
         natsorted(metadata_by_file.items(), key=lambda x: x[0].lower())
     )
-    return metadata_by_file
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("videos_dir", type=Path)
-    parser.add_argument("--url", type=str, default=None)
-    parser.add_argument("--num-workers", type=int, default=1)
-    args = parser.parse_args()
-
-    video_paths = utils.find_animated(
-        args.videos_dir,
-        include_gifs=False,  # FIXME: захардкожено
-    )
-    metadata = extract_metadata(
-        videos_dir=args.videos_dir,
-        video_paths=video_paths,
-        url=args.url,
-        num_workers=args.num_workers,
-    )
-    print(json.dumps(metadata, indent=4, ensure_ascii=False))
-
-
-if __name__ == "__main__":
-    main()
+    return metadata_by_file, skipped_files, ok_paths

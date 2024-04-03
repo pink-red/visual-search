@@ -120,7 +120,7 @@ def create_index(
     if progress is not None:
         progress((1, 1), desc="Загрузка модели")
 
-    files_metadata = extract_metadata(
+    files_metadata, skipped_files, ok_paths = extract_metadata(
         videos_dir=input_dir,
         video_paths=utils.find_animated(
             input_dir, include_gifs=False  # FIXME: захардкожено
@@ -136,7 +136,7 @@ def create_index(
         tmp_dir = Path(tmp_dir)
         input_images = extract_video_frames(
             videos_dir=input_dir,
-            include_gifs=False,  # FIXME: захардкожено
+            video_paths=ok_paths,
             index_dir=tmp_dir,
             interval_seconds=interval_seconds,
             side_size=448,  # FIXME: захардкожено
@@ -161,6 +161,7 @@ def create_index(
                 "interval_seconds": interval_seconds,
             },
             "files": files_metadata,
+            "skipped_files": skipped_files,
         }
 
         index_file_path, lossless_thumnails_zip_path = save_index(
